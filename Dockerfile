@@ -52,7 +52,12 @@ RUN pip3 install --no-cache-dir \
     packaging \
     Markdown \
     jinja2 \
-    tomli-w
+    tomli-w \
+    snowballstemmer \
+    websockets \
+    pathspec \
+    cryptography \
+    PyJWT
 
 # 6. Install WhatsApp bridge dependencies and stamp hash
 WORKDIR /app/hermes-agent/scripts/whatsapp-bridge

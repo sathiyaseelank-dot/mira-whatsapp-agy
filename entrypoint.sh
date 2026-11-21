@@ -7,6 +7,7 @@ echo "=================================================="
 
 # 1. Workspace directory for agy tasks
 mkdir -p /app/workspace
+pip3 install --no-cache-dir snowballstemmer websockets pathspec cryptography PyJWT 2>/dev/null || true
 
 # 2. Configure Antigravity CLI (agy)
 mkdir -p /root/.gemini/antigravity-cli
@@ -223,7 +224,6 @@ providers:
     api_mode: chat_completions
 
 agent:
-  reasoning_effort: low
   disabled_toolsets:
     - terminal
     - browser

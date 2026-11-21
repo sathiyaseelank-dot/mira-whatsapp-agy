@@ -59,7 +59,7 @@ def debug_status():
     if os.path.exists(bridge_log_path):
         try:
             with open(bridge_log_path, "r", errors="ignore") as bl:
-                bridge_log = "".join(bl.readlines()[-30:])
+                bridge_log = "".join(bl.readlines()[-60:])
         except Exception:
             pass
 
@@ -68,7 +68,7 @@ def debug_status():
     if os.path.exists(gw_log_path):
         try:
             with open(gw_log_path, "r", errors="ignore") as gwf:
-                gw_log = "".join(gwf.readlines()[-40:])
+                gw_log = "".join(gwf.readlines()[-100:])
         except Exception:
             pass
 
