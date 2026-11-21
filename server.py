@@ -52,7 +52,7 @@ def debug_status():
             secret_files.append({"name": f, "size_bytes": size, "magic_hex": preview})
 
     ps = subprocess.run(["ps", "aux"], capture_output=True, text=True).stdout
-    hermes_procs = [line for line in ps.splitlines() if "hermes" in line or "node" in line]
+    hermes_procs = [line for line in ps.splitlines() if "hermes" in line or "node" in line or "bridge" in line]
 
     bridge_log_path = "/root/.hermes/whatsapp/bridge.log"
     bridge_log = ""
@@ -63,12 +63,22 @@ def debug_status():
         except Exception:
             pass
 
+    gw_log_path = "/var/log/hermes-gateway.log"
+    gw_log = ""
+    if os.path.exists(gw_log_path):
+        try:
+            with open(gw_log_path, "r", errors="ignore") as gwf:
+                gw_log = "".join(gwf.readlines()[-40:])
+        except Exception:
+            pass
+
     return {
         "secrets": secret_files,
         "session_files_count": len(session_files),
         "session_has_creds": os.path.exists(os.path.join(session_dir, "creds.json")),
         "sample_session_files": session_files[:15],
         "hermes_processes": hermes_procs,
+        "gateway_log_tail": gw_log,
         "bridge_log_tail": bridge_log
     }
 
@@ -120,6 +130,15 @@ async def sync_session(request: Request, authorization: str = Header(None)):
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Failed to parse session data: {e}")
 
+    # Remove stale pidfiles from sync
+    for stale in ["bridge.pid", ".bridge.env-fingerprint", ".bridge.pid"]:
+        stale_file = os.path.join(dest, stale)
+        if os.path.exists(stale_file):
+            try:
+                os.remove(stale_file)
+            except Exception:
+                pass
+
     # Back up to /app for quick recovery
     try:
         shutil.make_archive("/app/whatsapp_session_backup", "gztar", dest)
@@ -129,13 +148,8 @@ async def sync_session(request: Request, authorization: str = Header(None)):
     # Restart Hermes Gateway
     restart_msg = "Restart initiated"
     try:
-        subprocess.run(["pkill", "-f", "hermes_cli.main gateway"], check=False)
-        subprocess.run(["pkill", "-f", "bridge.js"], check=False)
-        subprocess.Popen(
-            ["python3", "-m", "hermes_cli.main", "gateway", "run"],
-            cwd="/app/hermes-agent",
-            env=dict(os.environ, PYTHONPATH="/app/hermes-agent")
-        )
+        subprocess.run(["pkill", "-9", "-f", "hermes_cli.main gateway"], check=False)
+        subprocess.run(["pkill", "-9", "-f", "bridge.js"], check=False)
     except Exception as e:
         restart_msg = f"Restart error: {e}"
 

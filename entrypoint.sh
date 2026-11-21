@@ -25,6 +25,9 @@ echo "✓ Antigravity CLI configured with Gemini provider"
 mkdir -p /root/.hermes/cron
 mkdir -p /root/.hermes/whatsapp/session
 
+# Clean up stale PID files
+rm -f /root/.hermes/whatsapp/session/bridge.pid /root/.hermes/whatsapp/session/.bridge*
+
 # Restore WhatsApp credentials from Secret Files, backups, or environment
 python3 -c "
 import os, io, tarfile, base64, shutil
@@ -128,6 +131,39 @@ if not restored and env_b64:
 
 if not restored:
     print('ℹ No saved WhatsApp session found.')
+"
+
+# Clean up any stale PID files copied from archives
+rm -f /root/.hermes/whatsapp/session/bridge.pid /root/.hermes/whatsapp/session/.bridge*
+
+# Patch hermes_constants.py to use system Node.js and bypass PM runtime downloads
+python3 -c "
+path = '/app/hermes-agent/hermes_constants.py'
+if os.path.exists(path):
+    with open(path, 'r') as f:
+        code = f.read()
+
+    # 1. Patch find_node_executable
+    old_fn = 'def find_node_executable(command: str) -> str | None:'
+    new_fn = '''def find_node_executable(command: str) -> str | None:
+    found = shutil.which(command)
+    if found:
+        return found'''
+    if old_fn in code:
+        code = code.replace(old_fn, new_fn, 1)
+
+    # 2. Patch with_hermes_node_path
+    import re
+    code = re.sub(
+        r'def with_hermes_node_path\(env: dict\[str, str\] \| None = None\) -> dict\[str, str\]:.*?(?=\ndef )',
+        'def with_hermes_node_path(env: dict[str, str] | None = None) -> dict[str, str]:\n    return dict(os.environ) if env is None else dict(env)\n',
+        code,
+        flags=re.DOTALL
+    )
+
+    with open(path, 'w') as f:
+        f.write(code)
+    print('✓ Patched Hermes constants to use system Node (/usr/bin/node)')
 "
 
 # SOUL.md - Mira Tanglish Companion (Short, Human, Empathetic)
@@ -234,12 +270,20 @@ cat << 'EOF' > /root/.hermes/cron/jobs.json
 }
 EOF
 
-# 4. Start Hermes WhatsApp Gateway in background
+# 4. Start Hermes WhatsApp Gateway in background with supervision loop
 echo "Starting Hermes Gateway..."
+mkdir -p /var/log
 export PYTHONPATH="/app/hermes-agent:${PYTHONPATH}"
-cd /app/hermes-agent
-python3 -m hermes_cli.main gateway run &
-cd /app
+
+(
+  while true; do
+    echo "[$(date -u)] Starting Hermes Gateway..." >> /var/log/hermes-gateway.log
+    cd /app/hermes-agent
+    python3 -m hermes_cli.main gateway run >> /var/log/hermes-gateway.log 2>&1 || true
+    echo "[$(date -u)] Hermes Gateway exited with code $?, restarting in 3s..." >> /var/log/hermes-gateway.log
+    sleep 3
+  done
+) &
 
 # 5. Start HTTP Healthcheck and AGY API server on Render PORT (default: 10000)
 PORT=${PORT:-10000}
