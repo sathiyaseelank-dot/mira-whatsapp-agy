@@ -168,6 +168,16 @@ if os.path.exists(path):
     print('✓ Patched Hermes constants to use system Node (/usr/bin/node)')
 "
 
+# Stamp WhatsApp bridge node_modules so npm install is never rerun
+python3 -c "
+import hashlib, pathlib
+p = pathlib.Path('/app/hermes-agent/scripts/whatsapp-bridge/package.json')
+stamp = pathlib.Path('/app/hermes-agent/scripts/whatsapp-bridge/node_modules/.hermes-pkg-hash')
+if p.exists() and stamp.parent.exists():
+    stamp.write_text(hashlib.sha256(p.read_bytes()).hexdigest()[:16])
+    print('✓ Stamped WhatsApp bridge dependencies')
+"
+
 # SOUL.md - Mira Tanglish Companion (Short, Human, Empathetic)
 cat << 'EOF' > /root/.hermes/SOUL.md
 You are Mira, a caring, chill, and emotionally smart companion chatting on WhatsApp.
