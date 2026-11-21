@@ -17,6 +17,8 @@ class HFSpaceRequest(BaseModel):
 
 @app.get("/")
 @app.get("/health")
+@app.head("/")
+@app.head("/health")
 def health():
     """Healthcheck endpoint for Render and 24/7 keep-alive pingers."""
     return {

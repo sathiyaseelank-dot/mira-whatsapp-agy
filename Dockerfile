@@ -1,4 +1,4 @@
-FROM ubuntu:22.04
+FROM python:3.11-bookworm
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
@@ -7,12 +7,10 @@ ENV PYTHONUNBUFFERED=1
 RUN apt-get update && apt-get install -y \
     curl \
     git \
-    python3 \
-    python3-pip \
-    python3-venv \
     ca-certificates \
     tar \
     gzip \
+    file \
     jq \
     sqlite3 \
     && rm -rf /var/lib/apt/lists/*
@@ -41,11 +39,9 @@ RUN pip3 install --no-cache-dir \
     python-dotenv \
     fire
 
-# 5. Clone and install Hermes Agent
+# 5. Clone Hermes Agent
 WORKDIR /app
-RUN git clone https://github.com/NousResearch/hermes-agent.git /app/hermes-agent \
-    && cd /app/hermes-agent \
-    && pip3 install --no-cache-dir -r requirements.txt || true
+RUN git clone https://github.com/NousResearch/hermes-agent.git /app/hermes-agent
 
 # 6. Install WhatsApp bridge dependencies
 WORKDIR /app/hermes-agent/scripts/whatsapp-bridge

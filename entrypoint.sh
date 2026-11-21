@@ -27,8 +27,14 @@ mkdir -p /root/.hermes/whatsapp/session
 
 # Restore WhatsApp credentials from Render Secret File or environment
 if [ -f "/etc/secrets/whatsapp_session.tar.gz" ]; then
-    echo "Unpacking WhatsApp session from Render Secret File (/etc/secrets/whatsapp_session.tar.gz)..."
-    tar -xzf /etc/secrets/whatsapp_session.tar.gz -C /root/.hermes/whatsapp/session/ || true
+    echo "Restoring WhatsApp session from /etc/secrets/whatsapp_session.tar.gz..."
+    # Check if the file is raw gzip or base64 encoded text
+    if file /etc/secrets/whatsapp_session.tar.gz | grep -qi "gzip compressed"; then
+        tar -xzf /etc/secrets/whatsapp_session.tar.gz -C /root/.hermes/whatsapp/session/ || true
+    else
+        echo "Detected base64 text in secret file, decoding..."
+        base64 -d /etc/secrets/whatsapp_session.tar.gz | tar -xz -C /root/.hermes/whatsapp/session/ || tar -xzf /etc/secrets/whatsapp_session.tar.gz -C /root/.hermes/whatsapp/session/ || true
+    fi
     echo "✓ Restored WhatsApp credentials from Secret File"
 elif [ -f "/etc/secrets/creds.json" ]; then
     echo "Restoring creds.json from Render Secret File..."
