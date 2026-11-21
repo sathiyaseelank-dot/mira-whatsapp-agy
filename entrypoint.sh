@@ -71,6 +71,7 @@ providers:
     api_mode: chat_completions
 
 agent:
+  reasoning_effort: low
   disabled_toolsets:
     - terminal
     - browser
@@ -145,7 +146,10 @@ EOF
 
 # 4. Start Hermes WhatsApp Gateway in background
 echo "Starting Hermes Gateway..."
+export PYTHONPATH="/app/hermes-agent:${PYTHONPATH}"
+cd /app/hermes-agent
 python3 -m hermes_cli.main gateway run &
+cd /app
 
 # 5. Start HTTP Healthcheck and AGY API server on Render PORT (default: 10000)
 PORT=${PORT:-10000}

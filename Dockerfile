@@ -26,7 +26,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
 RUN curl -fsSL https://antigravity.google/cli/install.sh | bash
 ENV PATH="/root/.local/bin:${PATH}"
 
-# 4. Install essential Python libraries
+# 4. Install essential Python libraries and Hermes dependencies
 RUN pip3 install --no-cache-dir \
     fastapi \
     uvicorn \
@@ -34,7 +34,12 @@ RUN pip3 install --no-cache-dir \
     httpx \
     huggingface_hub \
     croniter \
-    pydantic
+    pydantic \
+    openai \
+    rich \
+    ruamel.yaml \
+    python-dotenv \
+    fire
 
 # 5. Clone and install Hermes Agent
 WORKDIR /app
