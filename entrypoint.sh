@@ -239,6 +239,7 @@ platform_toolsets:
 platforms:
   whatsapp:
     enabled: true
+    mode: bot
     dm_policy: open
     group_policy: open
     require_mention: true
@@ -253,6 +254,11 @@ cat << EOF > /root/.hermes/.env
 GROQ_API_KEY=${GROQ_API_KEY}
 GEMINI_API_KEY=${GEMINI_API_KEY}
 HF_TOKEN=${HF_TOKEN}
+WHATSAPP_ENABLED=true
+WHATSAPP_MODE=bot
+WHATSAPP_DM_POLICY=open
+WHATSAPP_GROUP_POLICY=open
+WHATSAPP_ALLOWED_USERS=*
 WHATSAPP_ALLOW_ALL_USERS=true
 GATEWAY_ALLOW_ALL_USERS=true
 WHATSAPP_HOME_CHANNEL=${WHATSAPP_HOME_CHANNEL:-}
@@ -286,6 +292,10 @@ EOF
 echo "Starting Hermes Gateway..."
 mkdir -p /var/log
 export PYTHONPATH="/app/hermes-agent:${PYTHONPATH}"
+export WHATSAPP_MODE=bot
+export WHATSAPP_DM_POLICY=open
+export WHATSAPP_GROUP_POLICY=open
+export WHATSAPP_ALLOWED_USERS=*
 
 (
   while true; do
