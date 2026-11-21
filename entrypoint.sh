@@ -25,43 +25,109 @@ echo "✓ Antigravity CLI configured with Gemini provider"
 mkdir -p /root/.hermes/cron
 mkdir -p /root/.hermes/whatsapp/session
 
-# Restore WhatsApp credentials from Render Secret File or environment
+# Restore WhatsApp credentials from Secret Files, backups, or environment
 python3 -c "
-import os, io, tarfile, base64
+import os, io, tarfile, base64, shutil
 
 dest = '/root/.hermes/whatsapp/session'
 os.makedirs(dest, exist_ok=True)
 
-secret_file = '/etc/secrets/whatsapp_session.tar.gz'
-env_b64 = os.environ.get('WHATSAPP_SESSION_B64', '').strip()
+restored = False
+secrets_dir = '/etc/secrets'
 
-if os.path.exists(secret_file):
-    print(f'Restoring WhatsApp session from {secret_file}...')
-    with open(secret_file, 'rb') as f:
-        raw = f.read()
-    try:
-        with tarfile.open(fileobj=io.BytesIO(raw), mode='r:gz') as tar:
-            tar.extractall(path=dest)
-        print('✓ Restored session from binary tarfile')
-    except Exception:
+# 1. Check all files in /etc/secrets
+if os.path.exists(secrets_dir):
+    for fname in os.listdir(secrets_dir):
+        fpath = os.path.join(secrets_dir, fname)
+        if not os.path.isfile(fpath):
+            continue
         try:
-            decoded = base64.b64decode(raw)
+            with open(fpath, 'rb') as f:
+                raw = f.read()
+            if not raw:
+                continue
+            
+            # Case A: creds.json or other json file
+            if fname.endswith('.json') or raw.strip().startswith(b'{'):
+                target_name = fname if fname.endswith('.json') else 'creds.json'
+                with open(os.path.join(dest, target_name), 'wb') as out:
+                    out.write(raw)
+                print(f'✓ Restored {target_name} from {fname}')
+                restored = True
+                continue
+
+            # Case B: Gzip tarball (binary magic \x1f\x8b)
+            if raw.startswith(b'\x1f\x8b'):
+                with tarfile.open(fileobj=io.BytesIO(raw), mode='r:gz') as tar:
+                    tar.extractall(path=dest)
+                print(f'✓ Restored session archive from {fname}')
+                restored = True
+                continue
+
+            # Case C: Base64 encoded tarball or json
+            try:
+                cleaned = raw.strip().strip(b'\"\'').replace(b'\n', b'').replace(b'\r', b'').replace(b' ', b'')
+                if cleaned.endswith(b'%'):
+                    cleaned = cleaned[:-1]
+                missing_padding = len(cleaned) % 4
+                if missing_padding:
+                    cleaned += b'=' * (4 - missing_padding)
+                decoded = base64.b64decode(cleaned)
+                if decoded.startswith(b'\x1f\x8b'):
+                    with tarfile.open(fileobj=io.BytesIO(decoded), mode='r:gz') as tar:
+                        tar.extractall(path=dest)
+                    print(f'✓ Restored base64 archive from {fname}')
+                    restored = True
+                elif decoded.strip().startswith(b'{'):
+                    with open(os.path.join(dest, 'creds.json'), 'wb') as out:
+                        out.write(decoded)
+                    print(f'✓ Restored base64 creds.json from {fname}')
+                    restored = True
+            except Exception as e:
+                print(f'Note: Could not decode base64 from {fname}: {e}')
+        except Exception as e:
+            print(f'Error processing {fname}: {e}')
+
+# 2. Check backup archive in /app
+backup_tar = '/app/whatsapp_session_backup.tar.gz'
+if not restored and os.path.exists(backup_tar):
+    try:
+        with tarfile.open(backup_tar, 'r:gz') as tar:
+            tar.extractall(path=dest)
+        print('✓ Restored session from /app backup tarball')
+        restored = True
+    except Exception as e:
+        print(f'Note: backup tarball error: {e}')
+
+# 3. Check environment variables
+env_creds = os.environ.get('WHATSAPP_CREDS_JSON', '').strip()
+env_b64 = os.environ.get('WHATSAPP_SESSION_B64', '').strip()
+if not restored and env_creds:
+    try:
+        with open(os.path.join(dest, 'creds.json'), 'w') as f:
+            f.write(env_creds)
+        print('✓ Restored creds.json from WHATSAPP_CREDS_JSON env')
+        restored = True
+    except Exception as e:
+        print(f'Error writing WHATSAPP_CREDS_JSON: {e}')
+
+if not restored and env_b64:
+    try:
+        cleaned = env_b64.strip('\"\'\n\r ').replace('\n', '').replace('\r', '').replace(' ', '')
+        if cleaned.endswith('%'): cleaned = cleaned[:-1]
+        pad = len(cleaned) % 4
+        if pad: cleaned += '=' * (4 - pad)
+        decoded = base64.b64decode(cleaned)
+        if decoded.startswith(b'\x1f\x8b'):
             with tarfile.open(fileobj=io.BytesIO(decoded), mode='r:gz') as tar:
                 tar.extractall(path=dest)
-            print('✓ Restored session from base64 secret file')
-        except Exception as e:
-            print(f'✗ Failed to decode session secret file: {e}')
-elif env_b64:
-    print('Restoring WhatsApp session from WHATSAPP_SESSION_B64...')
-    try:
-        decoded = base64.b64decode(env_b64)
-        with tarfile.open(fileobj=io.BytesIO(decoded), mode='r:gz') as tar:
-            tar.extractall(path=dest)
-        print('✓ Restored session from WHATSAPP_SESSION_B64 env')
+            print('✓ Restored session from WHATSAPP_SESSION_B64 env')
+            restored = True
     except Exception as e:
-        print(f'✗ Failed to decode WHATSAPP_SESSION_B64: {e}')
-else:
-    print('ℹ No saved WhatsApp session secret found.')
+        print(f'Error decoding WHATSAPP_SESSION_B64: {e}')
+
+if not restored:
+    print('ℹ No saved WhatsApp session found.')
 "
 
 # SOUL.md - Mira Tanglish Companion (Short, Human, Empathetic)

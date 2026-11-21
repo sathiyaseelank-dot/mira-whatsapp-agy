@@ -1,6 +1,10 @@
 import os
+import io
+import tarfile
+import shutil
+import base64
 import subprocess
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request, Header
 from pydantic import BaseModel
 
 app = FastAPI(title="Mira WhatsApp + Antigravity (AGY) Service")
@@ -26,6 +30,120 @@ def health():
         "service": "mira-whatsapp-agy",
         "agy": "installed",
         "hermes": "running"
+    }
+
+@app.get("/debug/status")
+def debug_status():
+    """Diagnostic endpoint to inspect session files, secrets, and Hermes process/logs."""
+    session_dir = "/root/.hermes/whatsapp/session"
+    secrets_dir = "/etc/secrets"
+    
+    session_files = os.listdir(session_dir) if os.path.exists(session_dir) else []
+    secret_files = []
+    if os.path.exists(secrets_dir):
+        for f in os.listdir(secrets_dir):
+            fp = os.path.join(secrets_dir, f)
+            size = os.path.getsize(fp) if os.path.isfile(fp) else 0
+            try:
+                with open(fp, "rb") as sf:
+                    preview = sf.read(30).hex()
+            except Exception:
+                preview = "unreadable"
+            secret_files.append({"name": f, "size_bytes": size, "magic_hex": preview})
+
+    ps = subprocess.run(["ps", "aux"], capture_output=True, text=True).stdout
+    hermes_procs = [line for line in ps.splitlines() if "hermes" in line or "node" in line]
+
+    bridge_log_path = "/root/.hermes/whatsapp/bridge.log"
+    bridge_log = ""
+    if os.path.exists(bridge_log_path):
+        try:
+            with open(bridge_log_path, "r", errors="ignore") as bl:
+                bridge_log = "".join(bl.readlines()[-30:])
+        except Exception:
+            pass
+
+    return {
+        "secrets": secret_files,
+        "session_files_count": len(session_files),
+        "session_has_creds": os.path.exists(os.path.join(session_dir, "creds.json")),
+        "sample_session_files": session_files[:15],
+        "hermes_processes": hermes_procs,
+        "bridge_log_tail": bridge_log
+    }
+
+@app.post("/session/sync")
+async def sync_session(request: Request, authorization: str = Header(None)):
+    """Upload WhatsApp session tar.gz or creds.json directly and restart Hermes bridge."""
+    expected_token = os.environ.get("GROQ_API_KEY", "") or os.environ.get("HF_TOKEN", "")
+    if not authorization or (expected_token and expected_token not in authorization):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    body = await request.body()
+    if not body:
+        raise HTTPException(status_code=400, detail="Empty body")
+
+    dest = "/root/.hermes/whatsapp/session"
+    os.makedirs(dest, exist_ok=True)
+
+    restored = []
+    # 1. Gzip tarball
+    if body.startswith(b'\x1f\x8b'):
+        with tarfile.open(fileobj=io.BytesIO(body), mode='r:gz') as tar:
+            tar.extractall(path=dest)
+            restored = tar.getnames()
+    # 2. Plain JSON
+    elif body.strip().startswith(b'{'):
+        with open(os.path.join(dest, "creds.json"), "wb") as f:
+            f.write(body)
+        restored = ["creds.json"]
+    # 3. Base64 encoded
+    else:
+        try:
+            cleaned = body.strip().strip(b'\"\'').replace(b'\n', b'').replace(b'\r', b'').replace(b' ', b'')
+            if cleaned.endswith(b'%'):
+                cleaned = cleaned[:-1]
+            pad = len(cleaned) % 4
+            if pad:
+                cleaned += b'=' * (4 - pad)
+            decoded = base64.b64decode(cleaned)
+            if decoded.startswith(b'\x1f\x8b'):
+                with tarfile.open(fileobj=io.BytesIO(decoded), mode='r:gz') as tar:
+                    tar.extractall(path=dest)
+                    restored = tar.getnames()
+            elif decoded.strip().startswith(b'{'):
+                with open(os.path.join(dest, "creds.json"), "wb") as f:
+                    f.write(decoded)
+                restored = ["creds.json"]
+            else:
+                raise ValueError("Payload not recognized as gzip tar or JSON")
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed to parse session data: {e}")
+
+    # Back up to /app for quick recovery
+    try:
+        shutil.make_archive("/app/whatsapp_session_backup", "gztar", dest)
+    except Exception:
+        pass
+
+    # Restart Hermes Gateway
+    restart_msg = "Restart initiated"
+    try:
+        subprocess.run(["pkill", "-f", "hermes_cli.main gateway"], check=False)
+        subprocess.run(["pkill", "-f", "bridge.js"], check=False)
+        subprocess.Popen(
+            ["python3", "-m", "hermes_cli.main", "gateway", "run"],
+            cwd="/app/hermes-agent",
+            env=dict(os.environ, PYTHONPATH="/app/hermes-agent")
+        )
+    except Exception as e:
+        restart_msg = f"Restart error: {e}"
+
+    return {
+        "status": "success",
+        "restored_files_count": len(restored),
+        "files_sample": restored[:15],
+        "hermes": restart_msg
     }
 
 @app.post("/agy/run")
@@ -100,7 +218,7 @@ def create_hf_space(req: HFSpaceRequest):
         return {
             "status": "success",
             "repo_id": repo_id,
-            "url": space_url
+            "space_url": space_url
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
