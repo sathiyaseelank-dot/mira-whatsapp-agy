@@ -138,6 +138,8 @@ rm -f /root/.hermes/whatsapp/session/bridge.pid /root/.hermes/whatsapp/session/.
 
 # Patch hermes_constants.py to use system Node.js and bypass PM runtime downloads
 python3 -c "
+import os, shutil, re
+
 path = '/app/hermes-agent/hermes_constants.py'
 if os.path.exists(path):
     with open(path, 'r') as f:
