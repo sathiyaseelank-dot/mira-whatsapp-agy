@@ -25,11 +25,19 @@ echo "✓ Antigravity CLI configured with Gemini provider"
 mkdir -p /root/.hermes/cron
 mkdir -p /root/.hermes/whatsapp/session
 
-# Unpack WhatsApp credentials if passed in env
-if [ -n "$WHATSAPP_SESSION_B64" ]; then
-    echo "Unpacking WhatsApp session from secret..."
+# Restore WhatsApp credentials from Render Secret File or environment
+if [ -f "/etc/secrets/whatsapp_session.tar.gz" ]; then
+    echo "Unpacking WhatsApp session from Render Secret File (/etc/secrets/whatsapp_session.tar.gz)..."
+    tar -xzf /etc/secrets/whatsapp_session.tar.gz -C /root/.hermes/whatsapp/session/ || true
+    echo "✓ Restored WhatsApp credentials from Secret File"
+elif [ -f "/etc/secrets/creds.json" ]; then
+    echo "Restoring creds.json from Render Secret File..."
+    cp /etc/secrets/creds.json /root/.hermes/whatsapp/session/
+    echo "✓ Restored creds.json"
+elif [ -n "$WHATSAPP_SESSION_B64" ]; then
+    echo "Unpacking WhatsApp session from env variable..."
     echo "$WHATSAPP_SESSION_B64" | base64 -d | tar -xz -C /root/.hermes/whatsapp/session || true
-    echo "✓ Restored WhatsApp credentials"
+    echo "✓ Restored WhatsApp credentials from env"
 fi
 
 # SOUL.md - Mira Tanglish Companion (Short, Human, Empathetic)

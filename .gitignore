@@ -1,0 +1,4 @@
+whatsapp_session.tar.gz
+.env
+__pycache__/
+*.log
