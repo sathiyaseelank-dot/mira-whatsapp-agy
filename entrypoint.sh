@@ -26,25 +26,43 @@ mkdir -p /root/.hermes/cron
 mkdir -p /root/.hermes/whatsapp/session
 
 # Restore WhatsApp credentials from Render Secret File or environment
-if [ -f "/etc/secrets/whatsapp_session.tar.gz" ]; then
-    echo "Restoring WhatsApp session from /etc/secrets/whatsapp_session.tar.gz..."
-    # Check if the file is raw gzip or base64 encoded text
-    if file /etc/secrets/whatsapp_session.tar.gz | grep -qi "gzip compressed"; then
-        tar -xzf /etc/secrets/whatsapp_session.tar.gz -C /root/.hermes/whatsapp/session/ || true
-    else
-        echo "Detected base64 text in secret file, decoding..."
-        base64 -d /etc/secrets/whatsapp_session.tar.gz | tar -xz -C /root/.hermes/whatsapp/session/ || tar -xzf /etc/secrets/whatsapp_session.tar.gz -C /root/.hermes/whatsapp/session/ || true
-    fi
-    echo "✓ Restored WhatsApp credentials from Secret File"
-elif [ -f "/etc/secrets/creds.json" ]; then
-    echo "Restoring creds.json from Render Secret File..."
-    cp /etc/secrets/creds.json /root/.hermes/whatsapp/session/
-    echo "✓ Restored creds.json"
-elif [ -n "$WHATSAPP_SESSION_B64" ]; then
-    echo "Unpacking WhatsApp session from env variable..."
-    echo "$WHATSAPP_SESSION_B64" | base64 -d | tar -xz -C /root/.hermes/whatsapp/session || true
-    echo "✓ Restored WhatsApp credentials from env"
-fi
+python3 -c "
+import os, io, tarfile, base64
+
+dest = '/root/.hermes/whatsapp/session'
+os.makedirs(dest, exist_ok=True)
+
+secret_file = '/etc/secrets/whatsapp_session.tar.gz'
+env_b64 = os.environ.get('WHATSAPP_SESSION_B64', '').strip()
+
+if os.path.exists(secret_file):
+    print(f'Restoring WhatsApp session from {secret_file}...')
+    with open(secret_file, 'rb') as f:
+        raw = f.read()
+    try:
+        with tarfile.open(fileobj=io.BytesIO(raw), mode='r:gz') as tar:
+            tar.extractall(path=dest)
+        print('✓ Restored session from binary tarfile')
+    except Exception:
+        try:
+            decoded = base64.b64decode(raw)
+            with tarfile.open(fileobj=io.BytesIO(decoded), mode='r:gz') as tar:
+                tar.extractall(path=dest)
+            print('✓ Restored session from base64 secret file')
+        except Exception as e:
+            print(f'✗ Failed to decode session secret file: {e}')
+elif env_b64:
+    print('Restoring WhatsApp session from WHATSAPP_SESSION_B64...')
+    try:
+        decoded = base64.b64decode(env_b64)
+        with tarfile.open(fileobj=io.BytesIO(decoded), mode='r:gz') as tar:
+            tar.extractall(path=dest)
+        print('✓ Restored session from WHATSAPP_SESSION_B64 env')
+    except Exception as e:
+        print(f'✗ Failed to decode WHATSAPP_SESSION_B64: {e}')
+else:
+    print('ℹ No saved WhatsApp session secret found.')
+"
 
 # SOUL.md - Mira Tanglish Companion (Short, Human, Empathetic)
 cat << 'EOF' > /root/.hermes/SOUL.md
