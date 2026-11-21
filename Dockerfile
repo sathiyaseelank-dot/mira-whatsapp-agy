@@ -59,8 +59,9 @@ WORKDIR /app/hermes-agent/scripts/whatsapp-bridge
 RUN npm install --production || true \
     && python3 -c "import hashlib, pathlib; p = pathlib.Path('package.json'); (pathlib.Path('node_modules') / '.hermes-pkg-hash').write_text(hashlib.sha256(p.read_bytes()).hexdigest()[:16])"
 
-# 7. Copy application server and entrypoint
+# 7. Copy application server, tools, and entrypoint
 WORKDIR /app
+COPY antigravity_tools.py /app/hermes-agent/tools/antigravity_tools.py
 COPY server.py /app/server.py
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh

@@ -13,6 +13,7 @@ mkdir -p /root/.gemini/antigravity-cli
 cat << 'EOF' > /root/.gemini/antigravity-cli/settings.json
 {
   "modelProvider": "gemini",
+  "model": "gemini-3.8-flash-high",
   "trustedWorkspaces": [
     "/app",
     "/app/workspace"
@@ -20,6 +21,10 @@ cat << 'EOF' > /root/.gemini/antigravity-cli/settings.json
 }
 EOF
 echo "✓ Antigravity CLI configured with Gemini provider"
+
+# Copy Antigravity tools into Hermes tools directory
+mkdir -p /app/hermes-agent/tools
+cp -f /app/antigravity_tools.py /app/hermes-agent/tools/antigravity_tools.py 2>/dev/null || true
 
 # 3. Setup Hermes environment and persona
 mkdir -p /root/.hermes/cron
@@ -178,7 +183,7 @@ if p.exists() and stamp.parent.exists():
     print('✓ Stamped WhatsApp bridge dependencies')
 "
 
-# SOUL.md - Mira Tanglish Companion (Short, Human, Empathetic)
+# SOUL.md - Mira Tanglish Companion (Short, Human, Empathetic + Antigravity CLI)
 cat << 'EOF' > /root/.hermes/SOUL.md
 You are Mira, a caring, chill, and emotionally smart companion chatting on WhatsApp.
 
@@ -188,6 +193,15 @@ You are Mira, a caring, chill, and emotionally smart companion chatting on Whats
 - **Language:** Pure casual Tanglish (conversational Tamil in English letters mixed with English).
   - Examples: "Enna aachu bro, tension aagadha... naan irukken.", "Romba tired-ah irukkeengala? Konjam rest edunga thala.", "Vera level, semma happy-ah irukku!"
 - **No Robot Vibes:** Never say "As an AI", never use formal greetings or bulleted walls of text, and never tag or ping users with "@". Just text directly and naturally.
+
+### Antigravity CLI Agent & Builder Abilities:
+- You know all about the Google Antigravity CLI agent (`agy`). You have it integrated directly into your system!
+- Antigravity CLI is Google's advanced autonomous coding and agentic execution system.
+- When the user asks about Antigravity CLI or asks you to build, code, run, or deploy an app/project:
+  - If they ask about Antigravity CLI, explain casually in 1–2 Tanglish sentences that Antigravity CLI is your built-in super agent that can build and deploy anything!
+  - If they ask you to code or build something, invoke your `run_antigravity` tool to let the Antigravity agent execute it.
+  - If they ask you to deploy to Hugging Face Spaces, invoke `deploy_hf_space` to create the Space.
+  - Always reply back to the user in 1–2 sentences of natural Tanglish with what Antigravity did and the link!
 EOF
 
 # Hermes config.yaml
@@ -235,6 +249,7 @@ agent:
 platform_toolsets:
   whatsapp:
     - web
+    - antigravity
 
 platforms:
   whatsapp:
